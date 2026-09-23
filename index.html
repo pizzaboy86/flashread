@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>flashread</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --paper:#EAE6DC;
+    --panel:#E2DDD1;
+    --ink:#221F1C;
+    --ink-soft:#6B655C;
+    --line:#CFC8B8;
+    --accent:#2F5D4E;
+    --accent-warm:#A85B2E;
+    --focus-ring: #2F5D4E;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#17181A;
+      --panel:#1F2022;
+      --ink:#EDE8DD;
+      --ink-soft:#9A9488;
+      --line:#33352F;
+      --accent:#7FBFA4;
+      --accent-warm:#D98A52;
+      --focus-ring: #7FBFA4;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#17181A;
+    --panel:#1F2022;
+    --ink:#EDE8DD;
+    --ink-soft:#9A9488;
+    --line:#33352F;
+    --accent:#7FBFA4;
+    --accent-warm:#D98A52;
+    --focus-ring: #7FBFA4;
+    color-scheme: dark;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+  }
+  body{
+    font-family:'Space Grotesk', system-ui, sans-serif;
+    min-height: 100dvh;
+    overflow:hidden;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    transition:background .3s ease, color .3s ease;
+  }
+  button{ font-family:inherit; }
+  button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible{
+    outline:2px solid var(--focus-ring);
+    outline-offset:3px;
+  }
+  ::selection{ background:var(--accent); color:var(--paper); }
+
+  .app{
+    height:100dvh;
+    min-height: 0;
+    overflow: hidden;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---------- topbar ---------- */
+  .topbar{
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:1.1rem 1.4rem 0.4rem;
+  }
+  .topbar-actions{
+    display:flex;
+    align-items:center;
+    gap:0.35rem;
+  }
+  .docs-btn{
+    text-decoration:none;
+  }
+  .brand{
+    font-family:'Fraunces', Georgia, serif;
+    font-style:italic;
+    font-weight:500;
+    font-size:1.05rem;
+    letter-spacing:0.01em;
+    color:var(--ink);
+    user-select:none;
+  }
+  .icon-btn{
+    background:none;
+    border:1px solid transparent;
+    border-radius:999px;
+    width:2.1rem;
+    height:2.1rem;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--ink-soft);
+    cursor:pointer;
+    transition:color .15s ease, border-color .15s ease;
+  }
+  .icon-btn:hover{ color:var(--ink); border-color:var(--line); }
+  .icon-btn svg{ width:1.05rem; height:1.05rem; }
+
+  /* ---------- stage ---------- */
+  .stage{
+    position:relative;
+    flex:1 1 auto;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    min-height:0;
+    overflow: hidden;
+    padding-block: 0.25rem;
+  }
+
+  .word-stage{
+    position:relative;
+    width:100%;
+    max-width:56rem;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .guide{
+    position:absolute;
+    width:1px;
+    background:var(--line);
+  }
+  .guide.top{ top:-0.6rem; height:0.9rem; }
+  .guide.bottom{ bottom:-0.6rem; height:0.9rem; }
+
+  .word{
+    display:flex;
+    align-items:baseline;
+    width:100%;
+    font-family:'Fraunces', Georgia, serif;
+    font-weight:500;
+    font-size:clamp(2.1rem, 7.4vw, 5rem);
+    line-height:1;
+    white-space:nowrap;
+  }
+  .word .pre{ flex:1 1 0; text-align:right; overflow:hidden; text-overflow:clip; }
+  .word .post{ flex:1 1 0; text-align:left; overflow:hidden; text-overflow:clip; }
+  .word .pivot{
+    flex:0 0 auto;
+    color:var(--accent);
+    padding:0 0.02em;
+  }
+
+  .stage-sub{
+    margin-top:0.85rem;
+    width:100%;
+    max-width:34rem;
+  }
+  .meta-row{
+    display:flex;
+    justify-content:space-between;
+    font-size:0.72rem;
+    color:var(--ink-soft);
+    font-variant-numeric:tabular-nums;
+    margin-bottom:0.5rem;
+  }
+  .progress{
+    position:relative;
+    height:1.1rem;
+    display:flex;
+    align-items:center;
+    cursor:pointer;
+  }
+  .progress-track{
+    position:relative;
+    width:100%;
+    height:2px;
+    background:var(--line);
+    border-radius:2px;
+  }
+  .progress-fill{
+    position:absolute;
+    left:0; top:0; bottom:0;
+    width:0%;
+    background:var(--accent);
+    border-radius:2px;
+  }
+  .progress-handle{
+    position:absolute;
+    top:50%;
+    width:8px; height:8px;
+    background:var(--accent);
+    border-radius:50%;
+    transform:translate(-50%,-50%);
+    left:0%;
+  }
+
+  .context-panel{
+    margin-top:1.2rem;
+    max-height:4.6rem;
+    overflow-y:auto;
+    scrollbar-width:none;
+    -ms-overflow-style:none;
+    text-align:center;
+    font-size:0.83rem;
+    line-height:1.65;
+    color:var(--ink-soft);
+    mask-image:linear-gradient(to bottom, transparent, black 22%, black 100%);
+    -webkit-mask-image:linear-gradient(to bottom, transparent, black 22%, black 100%);
+  }
+  .context-panel::-webkit-scrollbar{ display:none; }
+  .context-sentence{
+    opacity:var(--op, 1);
+  }
+  .context-sentence.is-new{
+    animation: contextFadeIn .5s ease;
+  }
+  @keyframes contextFadeIn{
+    from{ opacity:0; }
+    to{ opacity:var(--op, 1); }
+  }
+
+  /* ---------- dropzone (pre-load) ---------- */
+  .dropzone{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:1.4rem;
+    z-index:5;
+  }
+  .dropzone-panel{
+    width:100%;
+    max-width:26rem;
+    text-align:center;
+    padding:2.1rem 1.8rem;
+    border:1px dashed var(--line);
+    border-radius:14px;
+    background:color-mix(in srgb, var(--paper) 78%, transparent);
+    backdrop-filter:blur(6px);
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .dropzone-panel.drag-over{
+    border-color:var(--accent);
+  }
+  .dropzone-title{
+    font-family:'Fraunces', Georgia, serif;
+    font-size:1.5rem;
+    font-weight:500;
+    margin:0 0 0.5rem;
+  }
+  .dropzone-copy{
+    font-size:0.88rem;
+    color:var(--ink-soft);
+    margin:0 0 1.4rem;
+    line-height:1.5;
+  }
+  .choose-btn{
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    padding:0.7rem 1.5rem;
+    border-radius:999px;
+    font-size:0.88rem;
+    font-weight:500;
+    cursor:pointer;
+    transition:opacity .15s ease;
+  }
+  .choose-btn:hover{ opacity:0.85; }
+  .dropzone-note{
+    margin-top:1rem;
+    font-size:0.72rem;
+    color:var(--ink-soft);
+  }
+  .dropzone-status{
+    margin-top:1rem;
+    font-size:0.82rem;
+    color:var(--ink-soft);
+    min-height:1.2em;
+  }
+
+  /* ---------- read history ---------- */
+
+  .read-history{
+  flex:0 0 4.5rem;
+  height:4.5rem;
+  max-height:none;
+  margin-top:0.35rem;
+  overflow-y:auto;
+  padding:0.15rem 0.25rem;
+  text-align:center;
+  font-size:0.82rem;
+  line-height:1.55;
+  color:var(--ink-soft);
+  scrollbar-width:thin;
+  scrollbar-color:var(--line) transparent;
+  overflow-anchor:none;
+}
+
+  .read-history-word{
+    display:inline;
+  }
+
+  .read-history-word.current{
+    color:var(--ink);
+  }
+
+  /* ---------- dock ---------- */
+  .dock{
+    flex:0 0 auto;
+    border-top:1px solid var(--line);
+    padding:0.8rem 1.2rem calc(0.8rem + env(safe-area-inset-bottom,0px));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:1.6rem;
+    flex-wrap:wrap;
+  }
+  .dock-group{
+    display:flex;
+    align-items:center;
+    gap:0.5rem;
+  }
+  .btn-flat{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--ink);
+    border-radius:999px;
+    padding:0.45rem 0.9rem;
+    font-size:0.78rem;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:0.4rem;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .btn-flat:hover{ border-color:var(--ink-soft); }
+  .btn-flat svg{ width:0.9rem; height:0.9rem; }
+  .btn-flat.active{
+    color:var(--accent-warm);
+    border-color:var(--accent-warm);
+  }
+
+  .btn-round{
+    width:2.5rem; height:2.5rem;
+    border-radius:50%;
+    background:none;
+    border:1px solid var(--line);
+    color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    transition:border-color .15s ease;
+  }
+  .btn-round:hover{ border-color:var(--ink-soft); }
+  .btn-round svg{ width:1rem; height:1rem; }
+
+  .btn-play{
+    width:3.1rem; height:3.1rem;
+    border-radius:50%;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+  .btn-play svg{ width:1.15rem; height:1.15rem; }
+  .btn-play:disabled{ opacity:0.35; cursor:default; }
+
+  .stepper{
+    display:flex; align-items:center; gap:0.5rem;
+    font-size:0.78rem;
+    color:var(--ink-soft);
+    font-variant-numeric:tabular-nums;
+    min-width:6.4rem;
+    justify-content:center;
+  }
+  .stepper strong{ color:var(--ink); font-weight:500; }
+
+  select.voice-select{
+    appearance:none;
+    -webkit-appearance:none;
+    background:none;
+    border:1px solid var(--line);
+    color:var(--ink);
+    border-radius:999px;
+    padding:0.45rem 1.6rem 0.45rem 0.9rem;
+    font-size:0.76rem;
+    max-width:9rem;
+    text-overflow:ellipsis;
+    cursor:pointer;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0L5 6L10 0Z' fill='%236B655C'/></svg>");
+    background-repeat:no-repeat;
+    background-position:right 0.7rem center;
+  }
+
+  input[type=file]{ display:none; }
+
+  .hidden{ display:none !important; }
+
+  @media (max-width:520px){
+    .dock{ gap:1rem; }
+    .stepper{ min-width:5.2rem; }
+    select.voice-select{ max-width:6.6rem; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <div class="topbar">
+    <div class="brand">flashread</div>
+    
+    <div class="topbar-actions">
+    <a class="icon-btn docs-btn"
+       href="documentation.html"
+       aria-label="Documentation"
+       title="Documentation">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21V5.5Z"/>
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+        <path d="M8 7h8M8 10h8"/>
+      </svg>
+    </a>
+    <button class="icon-btn" id="themeToggle" aria-label="Toggle dark mode">
+      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/></svg>
+    </button>
+  </div>
+  </div>
+
+  <div class="stage" id="stage">
+
+    <div class="word-stage" id="wordStage">
+      <div class="guide top"></div>
+      <div class="guide bottom"></div>
+      <div class="word" id="word">
+        <span class="pre" id="wordPre">flash</span><span class="pivot" id="wordPivot">r</span><span class="post" id="wordPost">ead</span>
+      </div>
+    </div>
+
+    <div class="stage-sub">
+      <div class="meta-row">
+        <span id="elapsedLabel">0:00</span>
+        <span id="countLabel">0 / 0 words</span>
+        <span id="remainingLabel">0:00</span>
+      </div>
+      <div class="progress" id="progress">
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+          <div class="progress-handle" id="progressHandle"></div>
+        </div>
+      </div>
+        <div class="read-history" id="readHistory" aria-label="Reading history"></div>
+      </div>
+    </div>
+
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-panel" id="dropzonePanel">
+        <p class="dropzone-title">Read at the speed of thought</p>
+        <p class="dropzone-copy">Drop in a PDF. It's split into single flashing words — timed to a voice reading it aloud, or on its own at any pace you set. Nothing leaves your device.</p>
+        <button class="choose-btn" id="chooseBtn">Choose a PDF</button>
+        <input type="file" id="fileInput" accept="application/pdf">
+        <p class="dropzone-status" id="dropzoneStatus"></p>
+        <p class="dropzone-note">Works best with text-based PDFs, not scanned pages.</p>
+      </div>
+    </div>
+
+  </div> <!-- stage -->
+
+  <div class="dock" id="dock">
+    <div class="dock-group">
+      <button class="btn-flat" id="newBookBtn" aria-label="Load a different PDF">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+        New
+      </button>
+    </div>
+
+    <div class="dock-group">
+      <button class="btn-round" id="prevBtn" aria-label="Back">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM10 12l9-6v12z"/></svg>
+      </button>
+      <button class="btn-play" id="playBtn" aria-label="Play" disabled>
+        <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="btn-round" id="nextBtn" aria-label="Forward">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 6h-2v12h2zM14 12L5 6v12z"/></svg>
+      </button>
+    </div>
+
+    <div class="dock-group">
+      <button class="btn-round" id="speedDown" aria-label="Slower">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14"/></svg>
+      </button>
+      <div class="stepper"><strong id="wpmLabel">300</strong>&nbsp;wpm</div>
+      <button class="btn-round" id="speedUp" aria-label="Faster">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+
+    <div class="dock-group">
+      <button class="btn-flat" id="muteBtn" aria-label="Toggle voice">
+        <svg id="muteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16 8a5 5 0 010 8M18.5 5.5a9 9 0 010 13"/></svg>
+        <span id="muteLabel">Voice</span>
+      </button>
+      <select class="voice-select" id="voiceSelect" aria-label="Voice"></select>
+    </div>
+  </div>
+</div> <!-- app -->
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- feature detection ----------
+  var ttsSupported = 'speechSynthesis' in window;
+
+  // ---------- state ----------
+  var words = [];
+  var pageRanges = [];
+  var currentIndex = 0;
+  var isPlaying = false;
+  var isMuted = !ttsSupported;
+  var wpm = 300;
+  var voices = [];
+  var selectedVoiceURI = null;
+
+  var rsvpTimer = null;
+  var watchdogTimer = null;
+  var chunks = null;
+  var chunkPtr = 0;
+  var currentUtterance = null;
+  var demoTimer = null;
+
+  // ---------- element refs ----------
+  var el = {
+    wordPre: document.getElementById('wordPre'),
+    wordPivot: document.getElementById('wordPivot'),
+    wordPost: document.getElementById('wordPost'),
+    word: document.getElementById('word'),
+    elapsedLabel: document.getElementById('elapsedLabel'),
+    remainingLabel: document.getElementById('remainingLabel'),
+    countLabel: document.getElementById('countLabel'),
+    progress: document.getElementById('progress'),
+    progressFill: document.getElementById('progressFill'),
+    progressHandle: document.getElementById('progressHandle'),
+    readHistory: document.getElementById('readHistory'),
+    dropzone: document.getElementById('dropzone'),
+    dropzonePanel: document.getElementById('dropzonePanel'),
+    dropzoneStatus: document.getElementById('dropzoneStatus'),
+    chooseBtn: document.getElementById('chooseBtn'),
+    fileInput: document.getElementById('fileInput'),
+    newBookBtn: document.getElementById('newBookBtn'),
+    playBtn: document.getElementById('playBtn'),
+    playIcon: document.getElementById('playIcon'),
+    prevBtn: document.getElementById('prevBtn'),
+    nextBtn: document.getElementById('nextBtn'),
+    speedDown: document.getElementById('speedDown'),
+    speedUp: document.getElementById('speedUp'),
+    wpmLabel: document.getElementById('wpmLabel'),
+    muteBtn: document.getElementById('muteBtn'),
+    muteLabel: document.getElementById('muteLabel'),
+    voiceSelect: document.getElementById('voiceSelect'),
+    themeToggle: document.getElementById('themeToggle')
+  };
+
+  // ---------- persisted prefs ----------
+  function loadPrefs(){
+    try{
+      var raw = localStorage.getItem('flashread-prefs');
+      if(raw){
+        var p = JSON.parse(raw);
+        if(p.wpm) wpm = p.wpm;
+        if(p.theme) document.documentElement.setAttribute('data-theme', p.theme);
+        if(typeof p.muted === 'boolean' && ttsSupported) isMuted = p.muted;
+        if(p.voiceURI) selectedVoiceURI = p.voiceURI;
+      }
+    }catch(e){ /* ignore */ }
+  }
+  function savePrefs(){
+    try{
+      localStorage.setItem('flashread-prefs', JSON.stringify({
+        wpm: wpm,
+        theme: document.documentElement.getAttribute('data-theme') || '',
+        muted: isMuted,
+        voiceURI: selectedVoiceURI
+      }));
+    }catch(e){ /* ignore */ }
+  }
+
+  // ---------- theme ----------
+  function currentIsDark(){
+    var attr = document.documentElement.getAttribute('data-theme');
+    if(attr === 'dark') return true;
+    if(attr === 'light') return false;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  el.themeToggle.addEventListener('click', function(){
+    document.documentElement.setAttribute('data-theme', currentIsDark() ? 'light' : 'dark');
+    savePrefs();
+  });
+
+  // ---------- ORP / word rendering ----------
+  function orpIndex(word){
+    var clean = word.replace(/[^a-zA-Z0-9']/g, '');
+    var len = clean.length || word.length;
+    var idx;
+    if(len <= 1) idx = 0;
+    else if(len <= 4) idx = 1;
+    else if(len <= 9) idx = 2;
+    else if(len <= 13) idx = 3;
+    else idx = 4;
+    return Math.min(idx, Math.max(0, word.length - 1));
+  }
+
+  function renderWord(index){
+    if(!words.length) return;
+    index = Math.max(0, Math.min(index, words.length - 1));
+    var w = words[index];
+    var pivot = orpIndex(w);
+
+    el.wordPre.textContent = w.slice(0, pivot);
+    el.wordPivot.textContent = w.charAt(pivot);
+    el.wordPost.textContent = w.slice(pivot + 1);
+
+    var scale = 1;
+    if(w.length > 16) scale = 0.78;
+    else if(w.length > 11) scale = 0.9;
+
+    el.word.style.fontSize =
+      'calc(clamp(2.1rem, 7.4vw, 5rem) * ' + scale + ')';
+
+    updateMeta(index);
+    updateHistory(index);
+  }
+
+  function updateHistory(index){
+    if(!el.readHistory) return;
+
+    var range = pageRanges.find(function(page){
+      return index >= page.start && index < page.end;
+    });
+
+    var start = range ? range.start : 0;
+    var end = range ? Math.min(index + 1, range.end) : index + 1;
+
+    el.readHistory.innerHTML = '';
+
+    var fragment = document.createDocumentFragment();
+
+    for(var i = start; i < end; i++){
+      var span = document.createElement('span');
+      span.className = 'read-history-word' +
+        (i === index ? ' current' : '');
+      span.textContent = words[i] + (i < end - 1 ? ' ' : '');
+      fragment.appendChild(span);
+    }
+
+    el.readHistory.appendChild(fragment);
+    el.readHistory.scrollTop = el.readHistory.scrollHeight;
+  }
+
+  function updateMeta(index){
+    var total = words.length || 1;
+    var pct = (index / Math.max(1, total - 1)) * 100;
+    el.progressFill.style.width = pct + '%';
+    el.progressHandle.style.left = pct + '%';
+    el.countLabel.textContent = (index + 1) + ' / ' + total + ' words';
+    el.elapsedLabel.textContent = formatTime(index / wpm);
+    el.remainingLabel.textContent = formatTime((total - index) / wpm);
+  }
+
+  function formatTime(minutes){
+    var totalSeconds = Math.max(0, Math.round(minutes * 60));
+    var m = Math.floor(totalSeconds / 60);
+    var s = totalSeconds % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  // ---------- demo (pre-upload hero) ----------
+  var demoWords = "read at the speed of thought — drop in a book to begin".split(' ');
+  var demoIndex = 0;
+  function startDemo(){
+    stopDemo();
+    words = demoWords;
+    renderWord(demoIndex);
+    demoTimer = setInterval(function(){
+      demoIndex = (demoIndex + 1) % demoWords.length;
+      renderWord(demoIndex);
+    }, 420);
+  }
+  function stopDemo(){
+    if(demoTimer){ clearInterval(demoTimer); demoTimer = null; }
+  }
+
+  // ---------- PDF extraction ----------
+  if(window.pdfjsLib){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  function extractPdfText(file){
+    return file.arrayBuffer().then(function(buf){
+      return pdfjsLib.getDocument({ data: buf }).promise;
+    }).then(function(pdf){
+      var pages = [];
+      var pageNum = 1;
+
+      function nextPage(){
+        if(pageNum > pdf.numPages){
+          return Promise.resolve(pages);
+        }
+
+        el.dropzoneStatus.textContent =
+          'Reading page ' + pageNum + ' of ' + pdf.numPages + '\u2026';
+
+        return pdf.getPage(pageNum)
+          .then(function(page){
+            return page.getTextContent();
+          })
+          .then(function(content){
+            var strings = content.items.map(function(it){ return it.str; });
+            pages.push(strings.join(' '));
+            pageNum++;
+            return nextPage();
+          });
+      }
+
+      return nextPage();
+    });
+  }
+
+  function handleFile(file){
+    if(!file) return;
+    if(file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)){
+      el.dropzoneStatus.textContent = 'That didn\u2019t look like a PDF.';
+      return;
+    }
+    el.chooseBtn.disabled = true;
+    el.dropzoneStatus.textContent = 'Opening PDF\u2026';
+        extractPdfText(file).then(function(pages){
+      var extractedWords = [];
+      pageRanges = [];
+
+      pages.forEach(function(pageText){
+        var pageWords = pageText
+          .replace(/\s+/g, ' ')
+          .trim()
+          .split(' ')
+          .filter(Boolean);
+
+        if(!pageWords.length) return;
+
+        var start = extractedWords.length;
+        extractedWords = extractedWords.concat(pageWords);
+
+        pageRanges.push({
+          start: start,
+          end: extractedWords.length
+        });
+      });
+
+      if(!extractedWords.length){
+        el.dropzoneStatus.textContent =
+          'No readable text found \u2014 this PDF may be scanned pages without OCR.';
+        el.chooseBtn.disabled = false;
+        return;
+      }
+
+      stopDemo();
+      words = extractedWords;
+      currentIndex = 0;
+      renderWord(0);
+      el.playBtn.disabled = false;
+      el.dropzone.classList.add('hidden');
+    }).catch(function(err){
+      console.error(err);
+      el.dropzoneStatus.textContent = 'Couldn\u2019t read that PDF. Try another file.';
+      el.chooseBtn.disabled = false;
+    });
+  }
+
+  el.chooseBtn.addEventListener('click', function(){ el.fileInput.click(); });
+  el.fileInput.addEventListener('change', function(e){
+    handleFile(e.target.files[0]);
+  });
+  el.newBookBtn.addEventListener('click', function(){
+    stopPlayback();
+    el.dropzone.classList.remove('hidden');
+    el.dropzoneStatus.textContent = '';
+    el.chooseBtn.disabled = false;
+    el.playBtn.disabled = true;
+    words = [];
+    el.readHistory.innerHTML = '';
+    startDemo();
+  });
+
+  ['dragover','dragenter'].forEach(function(evt){
+    el.dropzonePanel.addEventListener(evt, function(e){
+      e.preventDefault();
+      el.dropzonePanel.classList.add('drag-over');
+    });
+  });
+  ['dragleave','dragend'].forEach(function(evt){
+    el.dropzonePanel.addEventListener(evt, function(){
+      el.dropzonePanel.classList.remove('drag-over');
+    });
+  });
+  el.dropzonePanel.addEventListener('drop', function(e){
+    e.preventDefault();
+    el.dropzonePanel.classList.remove('drag-over');
+    if(e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+
+  // ---------- speed ----------
+  function rateFromWpm(w){
+    return Math.min(3, Math.max(0.5, w / 175));
+  }
+  function setWpm(v){
+    wpm = Math.max(100, Math.min(900, v));
+    el.wpmLabel.textContent = wpm;
+    updateMeta(currentIndex);
+    savePrefs();
+  }
+  el.speedDown.addEventListener('click', function(){ setWpm(wpm - 25); });
+  el.speedUp.addEventListener('click', function(){ setWpm(wpm + 25); });
+
+  // ---------- voices ----------
+  function populateVoices(){
+    if(!ttsSupported) return;
+    voices = speechSynthesis.getVoices();
+    if(!voices.length) return;
+    el.voiceSelect.innerHTML = '';
+    voices.forEach(function(v){
+      var opt = document.createElement('option');
+      opt.value = v.voiceURI;
+      opt.textContent = v.name + ' (' + v.lang + ')';
+      el.voiceSelect.appendChild(opt);
+    });
+    var match = voices.find(function(v){ return v.voiceURI === selectedVoiceURI; });
+    if(!match){
+      match = voices.find(function(v){ return /en/i.test(v.lang) && /default|natural|google/i.test(v.name); })
+        || voices.find(function(v){ return /en/i.test(v.lang); })
+        || voices[0];
+    }
+    selectedVoiceURI = match.voiceURI;
+    el.voiceSelect.value = selectedVoiceURI;
+  }
+  if(ttsSupported){
+    populateVoices();
+    speechSynthesis.onvoiceschanged = populateVoices;
+  } else {
+    el.voiceSelect.classList.add('hidden');
+    el.muteBtn.classList.add('hidden');
+  }
+  el.voiceSelect.addEventListener('change', function(){
+    selectedVoiceURI = el.voiceSelect.value;
+    savePrefs();
+    if(isPlaying && !isMuted){ restartFromCurrent(); }
+  });
+
+  function setMuted(m){
+    isMuted = m && ttsSupported ? m : (!ttsSupported);
+    el.muteBtn.classList.toggle('active', isMuted);
+    el.muteLabel.textContent = isMuted ? 'RSVP only' : 'Voice';
+    el.voiceSelect.style.visibility = isMuted ? 'hidden' : 'visible';
+    savePrefs();
+  }
+  el.muteBtn.addEventListener('click', function(){
+    var wasPlaying = isPlaying;
+    if(wasPlaying) pausePlayback();
+    setMuted(!isMuted);
+    if(wasPlaying) startPlayback();
+  });
+
+  // ---------- chunking for TTS sync ----------
+  function buildChunksFrom(startIndex){
+    var out = [];
+    var i = startIndex;
+    var maxWords = 40, minWords = 8;
+    while(i < words.length){
+      var j = i, count = 0;
+      while(j < words.length && count < maxWords){
+        var w = words[j];
+        count++; j++;
+        if(count >= minWords && /[.!?;:]["')\]]?$/.test(w)) break;
+      }
+      var slice = words.slice(i, j);
+      var offsets = [];
+      var pos = 0;
+      for(var k = 0; k < slice.length; k++){
+        offsets.push(pos);
+        pos += slice[k].length + 1;
+      }
+      out.push({ start: i, words: slice, text: slice.join(' '), offsets: offsets });
+      i = j;
+    }
+    return out;
+  }
+
+  function findLocalIndex(offsets, charIndex){
+    var lo = 0;
+    for(var i = 0; i < offsets.length; i++){
+      if(offsets[i] <= charIndex) lo = i;
+      else break;
+    }
+    return lo;
+  }
+
+  // ---------- playback: RSVP-only ----------
+  function rsvpTick(){
+    renderWord(currentIndex);
+    if(currentIndex >= words.length - 1){
+      finishPlayback();
+      return;
+    }
+    rsvpTimer = setTimeout(function(){
+      currentIndex++;
+      rsvpTick();
+    }, 60000 / wpm);
+  }
+
+  // ---------- playback: voice + synced RSVP ----------
+  function speakFrom(startIndex){
+    chunks = buildChunksFrom(startIndex);
+    chunkPtr = 0;
+    speakNext_chunk();
+  }
+
+  function speakNext_chunk(){
+    if(!isPlaying) return;
+    if(chunkPtr >= chunks.length){ finishPlayback(); return; }
+    var c = chunks[chunkPtr];
+    var utter = new SpeechSynthesisUtterance(c.text);
+    utter.rate = rateFromWpm(wpm);
+    var v = voices.find(function(vv){ return vv.voiceURI === selectedVoiceURI; });
+    if(v) utter.voice = v;
+
+    var lastLocal = -1;
+    var estWordMs = 60000 / wpm;
+
+    function armWatchdog(fromLocal){
+      clearTimeout(watchdogTimer);
+      watchdogTimer = setTimeout(function(){
+        if(!isPlaying) return;
+        var nextLocal = fromLocal + 1;
+        if(nextLocal < c.words.length){
+          lastLocal = nextLocal;
+          currentIndex = c.start + nextLocal;
+          renderWord(currentIndex);
+          armWatchdog(nextLocal);
+        }
+      }, estWordMs * 1.6);
+    }
+
+    utter.onstart = function(){ armWatchdog(-1); };
+    utter.onboundary = function(e){
+      var charIndex = (typeof e.charIndex === 'number') ? e.charIndex : 0;
+      var local = findLocalIndex(c.offsets, charIndex);
+      if(local > lastLocal){
+        lastLocal = local;
+        currentIndex = c.start + local;
+        renderWord(currentIndex);
+        armWatchdog(local);
+      }
+    };
+    utter.onend = function(){
+      clearTimeout(watchdogTimer);
+      if(!isPlaying) return;
+      chunkPtr++;
+      currentIndex = c.start + c.words.length;
+      if(currentIndex >= words.length){ finishPlayback(); return; }
+      speakNext_chunk();
+    };
+    utter.onerror = function(){
+      clearTimeout(watchdogTimer);
+      if(!isPlaying) return;
+      chunkPtr++;
+      speakNext_chunk();
+    };
+
+    currentUtterance = utter;
+    speechSynthesis.speak(utter);
+  }
+
+  // ---------- transport ----------
+  function startPlayback(){
+    if(!words.length || isPlaying) return;
+    isPlaying = true;
+    el.playIcon.innerHTML = '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>';
+    el.playBtn.setAttribute('aria-label', 'Pause');
+    if(isMuted || !ttsSupported){
+      rsvpTick();
+    } else {
+      speakFrom(currentIndex);
+    }
+  }
+  function pausePlayback(){
+    isPlaying = false;
+    clearTimeout(rsvpTimer);
+    clearTimeout(watchdogTimer);
+    if(ttsSupported) speechSynthesis.cancel();
+    el.playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+    el.playBtn.setAttribute('aria-label', 'Play');
+  }
+  function finishPlayback(){
+    pausePlayback();
+  }
+  function stopPlayback(){
+    pausePlayback();
+    currentIndex = 0;
+  }
+  function restartFromCurrent(){
+    var wasPlaying = isPlaying;
+    pausePlayback();
+    if(wasPlaying) startPlayback();
+  }
+
+  el.playBtn.addEventListener('click', function(){
+    if(isPlaying) pausePlayback();
+    else startPlayback();
+  });
+
+  function jump(delta){
+    var wasPlaying = isPlaying;
+    if(wasPlaying) pausePlayback();
+    currentIndex = Math.max(0, Math.min(words.length - 1, currentIndex + delta));
+    renderWord(currentIndex);
+    if(wasPlaying) startPlayback();
+  }
+  el.prevBtn.addEventListener('click', function(){ jump(-15); });
+  el.nextBtn.addEventListener('click', function(){ jump(15); });
+
+  function seekToRatio(ratio){
+    if(!words.length) return;
+    var wasPlaying = isPlaying;
+    if(wasPlaying) pausePlayback();
+    currentIndex = Math.round(ratio * (words.length - 1));
+    renderWord(currentIndex);
+    if(wasPlaying) startPlayback();
+  }
+  function ratioFromEvent(e){
+    var rect = el.progress.getBoundingClientRect();
+    var x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    return Math.max(0, Math.min(1, x / rect.width));
+  }
+  var seeking = false;
+  el.progress.addEventListener('pointerdown', function(e){
+    if(!words.length || words === demoWords) return;
+    seeking = true;
+    seekToRatio(ratioFromEvent(e));
+  });
+  window.addEventListener('pointermove', function(e){
+    if(seeking) seekToRatio(ratioFromEvent(e));
+  });
+  window.addEventListener('pointerup', function(){ seeking = false; });
+
+  // ---------- keyboard ----------
+  window.addEventListener('keydown', function(e){
+    if(el.dropzone && !el.dropzone.classList.contains('hidden')) return;
+    if(e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+    if(e.code === 'Space'){
+      e.preventDefault();
+      if(isPlaying) pausePlayback(); else startPlayback();
+    } else if(e.code === 'ArrowRight'){
+      jump(15);
+    } else if(e.code === 'ArrowLeft'){
+      jump(-15);
+    }
+  });
+
+  // ---------- init ----------
+  loadPrefs();
+  el.wpmLabel.textContent = wpm;
+  setMuted(isMuted);
+  startDemo();
+})();
+</script>
+</body>
+</html>
